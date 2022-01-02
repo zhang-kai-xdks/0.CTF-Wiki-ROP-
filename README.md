@@ -11,6 +11,7 @@
  栈溢出，即向栈中变量写入的字，其字节数超出了该变量申请的字节数（例如：该变量总共申请2字节空间，非要往里面存32位int型数据）。  
  gets()函数不检查输入字符串的长度，而是以回车来判断输入是否结束，所以很容易导致栈溢出（例如：莫里斯蠕虫）  
  //PIE和ASLR机制留待学习补充，本页不考虑其存在。   
+ 代码段：  
    #include <stdio.h>  
    #include <string.h>  
    void success() { puts("You Hava already controlled it."); }  
@@ -24,3 +25,20 @@
      vulnerable();  
      return 0;  
    }  
+     
+ 编译：
+   ➜  stack-example gcc -m32 -fno-stack-protector stack_example.c -o stack_example   
+  stack_example.c: In function ‘vulnerable’:  
+  stack_example.c:6:3: warning: implicit declaration of function ‘gets’ [-Wimplicit-function-declaration]  
+     gets(s);  
+     ^  
+  /tmp/ccPU8rRA.o：在函数‘vulnerable’中：  
+  stack_example.c:(.text+0x27): 警告： the `gets' function is dangerous and should not be used.  
+  注意警告！  
+    
+  常见的危险函数：  
+  输入：gets(),scanf(),vscanf,  
+  输出：sprintf()  
+  字符串：strcpy(),strcat(),bcopy  
+    
+  确定填充长度：目的计算我们要操作的地址与我们要覆盖的地址的距离，通过覆盖地址实现对程序的直接或间接控制。
