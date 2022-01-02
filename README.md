@@ -26,7 +26,7 @@
      return 0;  
    }  
      
- 编译：
+ 编译：  
    ➜  stack-example gcc -m32 -fno-stack-protector stack_example.c -o stack_example   
   stack_example.c: In function ‘vulnerable’:  
   stack_example.c:6:3: warning: implicit declaration of function ‘gets’ [-Wimplicit-function-declaration]  
