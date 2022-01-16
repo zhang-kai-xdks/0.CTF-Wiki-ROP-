@@ -1,2 +1,11 @@
 sniperoj-pwn100-shellcode-x86-64    
 
+安全环境：   
+    Arch:     amd64-64-little   
+    RELRO:    Partial RELRO   
+    Stack:    No canary found   
+    NX:       NX disabled   
+    PIE:      PIE enabled   
+    RWX:      Has RWX segments    
+64位，部分relro，开启pie，有rwx权限    
+    
